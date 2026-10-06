@@ -35,7 +35,7 @@ def render_bilf_mail(booking: CarBooking_DB) -> str:
         html = html.replace("{{ booking.council_sv }}", python_html.escape(booking.council.name_sv, quote=True))
     else:
         html = html.replace("{{ booking.council_en }}", "Unknown council")
-        html = html.replace("{{ booking.council_sv }}", "Okänd nämnd")
+        html = html.replace("{{ booking.council_sv }}", "Okänt utskott")
 
     return html
 
