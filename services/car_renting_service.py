@@ -4,7 +4,7 @@ from api_schemas.car_booking_schema import CarBookingCreate, CarBookingUpdate
 from db_models.council_model import Council_DB
 from database import DB_dependency
 from typing import Annotated
-from sqlalchemy import or_, and_, literal
+from sqlalchemy import or_, and_, literal, text
 from user.permission import Permission
 from db_models.user_model import User_DB
 from db_models.car_booking_model import CarBooking_DB
@@ -16,6 +16,21 @@ from mailer import bilf_mailer
 def is_user_blocked(user_id: int, db: DB_dependency) -> bool:
     block = db.query(CarBlock_DB).filter(CarBlock_DB.user_id == user_id).first()
     return block is not None
+
+
+# Fixed key for the car booking advisory lock. The value is arbitrary but must be stable.
+CAR_BOOKING_LOCK_KEY = 48017
+
+
+def acquire_car_booking_lock(db: DB_dependency) -> None:
+    """Serialize car booking mutations with a transaction-scoped advisory lock.
+
+    The overlap check and the insert/update that follows it must happen atomically,
+    otherwise two concurrent requests can both pass the check and double-book the car.
+    The lock is held until the current transaction commits or rolls back, which
+    covers the whole request, and is then released automatically by PostgreSQL.
+    """
+    db.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": CAR_BOOKING_LOCK_KEY})
 
 
 def overlap_query_create(
@@ -78,6 +93,9 @@ def create_new_booking(
     current_user: Annotated[User_DB, Permission.member()],
     manage_permission: Annotated[bool, Permission.check("manage", "Car")],
 ) -> CarBooking_DB:
+    # Serialize the overlap check and the insert that follows it
+    acquire_car_booking_lock(db)
+
     booking_confirmed = True  # Default to confirmed unless conditions below change it
     if data.end_time < data.start_time:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Booking end time cannot be before start time.")
@@ -144,6 +162,8 @@ def booking_update(
     manage_permission: Annotated[bool, Permission.check("manage", "Car")],
     db: DB_dependency,
 ) -> CarBooking_DB:
+    # Serialize the overlap check and the update that follows it
+    acquire_car_booking_lock(db)
 
     car_booking = db.query(CarBooking_DB).filter(CarBooking_DB.booking_id == booking_id).first()
     if car_booking is None:
