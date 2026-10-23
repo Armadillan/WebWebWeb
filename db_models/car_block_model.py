@@ -17,7 +17,9 @@ class CarBlock_DB(BaseModel_DB):
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     reason: Mapped[str] = mapped_column(String(MAX_CAR_BLOCK), nullable=False)
 
-    user_id: Mapped[int] = mapped_column(ForeignKey("user_table.id"), nullable=False, index=True)
+    # A user can be blocked at most once, so user_id is unique
+    # (the unique constraint also provides the index)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user_table.id"), nullable=False, unique=True)
     user: Mapped["User_DB"] = relationship(foreign_keys=[user_id], init=False)
 
     blocked_by: Mapped[int] = mapped_column(ForeignKey("user_table.id"), nullable=False)

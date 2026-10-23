@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from api_schemas.car_block_schema import CarBlockCreate, CarBlockRead
 from database import DB_dependency
 from typing import Annotated
@@ -24,8 +25,14 @@ def block_user_from_car_booking(
     if existing:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="User is already blocked from car booking.")
     car_block = CarBlock_DB(user_id=block.user_id, reason=block.reason, blocked_by=current_user.id)
-    db.add(car_block)
-    db.commit()
+    try:
+        db.add(car_block)
+        db.commit()
+    except IntegrityError:
+        # The unique constraint on user_id catches the race where two admins
+        # block the same user between the check above and the insert
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="User is already blocked from car booking.")
     return car_block
 
 
