@@ -1,5 +1,5 @@
-import os
 import html as python_html
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 
@@ -11,15 +11,17 @@ from mailer.mail_constants import (
 from mailer.mail_core import send_mail_to_address
 
 
+# The templates live next to this file, independent of the process working directory
+MAILER_DIR = Path(__file__).resolve().parent
+
+
 def bilf_mailer(booking: CarBooking_DB) -> None:
 
-    path = os.getcwd()
-
     if booking.personal:
-        with open(f"{path}/mailer/bilf-mail-private.html", "r", encoding="utf-8") as f:
+        with open(MAILER_DIR / "bilf-mail-private.html", "r", encoding="utf-8") as f:
             html = f.read()
     else:
-        with open(f"{path}/mailer/bilf-mail-council.html", "r", encoding="utf-8") as f:
+        with open(MAILER_DIR / "bilf-mail-council.html", "r", encoding="utf-8") as f:
             html = f.read()
 
     stockholm_tz = ZoneInfo("Europe/Stockholm")
