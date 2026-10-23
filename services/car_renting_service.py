@@ -168,6 +168,12 @@ def booking_update(
     if (car_booking.user != current_user) and (not manage_permission):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="You do not have permission to update this booking.")
 
+    # Only staff with the manage Car permission may change the confirmed status
+    if data.confirmed is not None and not manage_permission:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, detail="Only staff can change the confirmed status of a booking."
+        )
+
     if data.confirmed is not None:
         booking_confirmed = data.confirmed  # default to updated value, fallback to previous value
     else:

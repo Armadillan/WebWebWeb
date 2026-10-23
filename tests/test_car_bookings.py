@@ -139,6 +139,27 @@ def test_admin_can_confirm_unconfirm(client, admin_token, admin_council_id):
     assert resp3.json()["confirmed"] is True
 
 
+# Test that members cannot confirm their own bookings (staff only)
+def test_member_cannot_confirm_own_booking(client, member_token, member_council_id):
+    # User books a personal booking (starts unconfirmed, awaiting staff confirmation)
+    start = stockholm_dt(2030, 3, 10, 10)
+    end = stockholm_dt(2030, 3, 10, 12)
+    resp = create_booking(client, member_token, start, end, "personal booking", personal=True)
+    assert resp.status_code in (200, 201)
+    booking_id = resp.json()["booking_id"]
+    assert resp.json()["confirmed"] is False
+
+    # Member tries to confirm the booking themselves, should be rejected
+    resp2 = patch_booking(client, member_token, booking_id, confirmed=True)
+    assert resp2.status_code == 403
+
+    # Member can still update other fields of their own booking
+    resp3 = patch_booking(client, member_token, booking_id, description="updated description")
+    assert resp3.status_code == 200
+    assert resp3.json()["description"] == "updated description"
+    assert resp3.json()["confirmed"] is False
+
+
 def test_user_edit_autounconfirm_council(client, member_token, member_council_id):
     # User books inside hours
     start = stockholm_dt(2030, 1, 10, 10)
@@ -154,7 +175,7 @@ def test_user_edit_autounconfirm_council(client, member_token, member_council_id
     assert resp3.json()["confirmed"] is True
 
 
-def test_user_edit_autounconfirm_personal(client, member_token, member_council_id):
+def test_user_edit_autounconfirm_personal(client, admin_token, member_token, member_council_id):
     # User books inside hours
     start = stockholm_dt(2030, 1, 10, 10)
     end = stockholm_dt(2030, 1, 10, 12)
@@ -163,7 +184,7 @@ def test_user_edit_autounconfirm_personal(client, member_token, member_council_i
     assert resp.json()["confirmed"] is False
 
     # Admin confirms
-    resp2 = patch_booking(client, member_token, booking_id, confirmed=True)
+    resp2 = patch_booking(client, admin_token, booking_id, confirmed=True)
     assert resp2.json()["confirmed"] is True
 
     # Try to edit to outside hours
@@ -173,7 +194,7 @@ def test_user_edit_autounconfirm_personal(client, member_token, member_council_i
     assert resp3.json()["confirmed"] is False
 
 
-def test_user_edit_keep_confirmed_in_hours(client, member_token, member_council_id):
+def test_user_edit_keep_confirmed_in_hours(client, admin_token, member_token, member_council_id):
     # User books inside hours
     start = stockholm_dt(2030, 1, 10, 10)
     end = stockholm_dt(2030, 1, 10, 12)
@@ -183,7 +204,7 @@ def test_user_edit_keep_confirmed_in_hours(client, member_token, member_council_
     assert resp.json()["confirmed"] is False
 
     # Admin confirms
-    resp2 = patch_booking(client, member_token, booking_id, confirmed=True)
+    resp2 = patch_booking(client, admin_token, booking_id, confirmed=True)
     assert resp2.json()["confirmed"] is True
 
     # Try to edit, keep inside hours
@@ -194,7 +215,7 @@ def test_user_edit_keep_confirmed_in_hours(client, member_token, member_council_
 
 
 # Test that movements larger than one week for a personal booking get unconfirmed
-def test_personal_booking_large_movement_unconfirms(client, member_token, member_council_id):
+def test_personal_booking_large_movement_unconfirms(client, admin_token, member_token, member_council_id):
     # User books inside hours
     start = stockholm_dt(2030, 1, 10, 10)
     end = stockholm_dt(2030, 1, 10, 12)
@@ -204,7 +225,7 @@ def test_personal_booking_large_movement_unconfirms(client, member_token, member
     assert resp.json()["confirmed"] is False
 
     # Admin confirms
-    resp2 = patch_booking(client, member_token, booking_id, confirmed=True)
+    resp2 = patch_booking(client, admin_token, booking_id, confirmed=True)
     assert resp2.json()["confirmed"] is True
 
     # Try to edit, move more than a week, should become unconfirmed
@@ -218,7 +239,7 @@ def test_personal_booking_large_movement_unconfirms(client, member_token, member
 
 
 # Test autounconfirm of multi day bookings
-def test_personal_booking_multi_day_unconfirms(client, member_token, member_council_id):
+def test_personal_booking_multi_day_unconfirms(client, admin_token, member_token, member_council_id):
     # User books inside hours
     start = stockholm_dt(2030, 1, 10, 10)
     end = stockholm_dt(2030, 1, 10, 12)
@@ -228,7 +249,7 @@ def test_personal_booking_multi_day_unconfirms(client, member_token, member_coun
     assert resp.json()["confirmed"] is False
 
     # Admin confirms
-    resp2 = patch_booking(client, member_token, booking_id, confirmed=True)
+    resp2 = patch_booking(client, admin_token, booking_id, confirmed=True)
     assert resp2.json()["confirmed"] is True
 
     # Try to edit, really long booking, should unconfirm
