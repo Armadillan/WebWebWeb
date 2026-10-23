@@ -173,6 +173,10 @@ def booking_update(
                 status.HTTP_400_BAD_REQUEST, detail="Booking start time cannot be after nor equal to end time."
             )
 
+        # Consistent with create: a (new) start time cannot be in the past
+        if data.start_time is not None and data.start_time < datetime.now(UTC):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Booking start time cannot be in the past.")
+
         booking_overlaps = overlap_query_update(
             start_time=check_start_time,
             end_time=check_end_time,

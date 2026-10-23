@@ -2,6 +2,7 @@
 import pytest
 from main import app
 from datetime import datetime, timedelta, timezone
+from db_models.car_booking_model import CarBooking_DB
 from .basic_factories import auth_headers
 
 # Helper to get Stockholm local time (UTC+1 or UTC+2 DST, but for simplicity, use UTC+1)
@@ -395,6 +396,33 @@ def test_end_before_start_not_allowed(client, admin_token, admin_council_id):
     booking_id = resp2.json()["booking_id"]
     patch_resp = patch_booking(client, admin_token, booking_id, start_time=start.isoformat(), end_time=end.isoformat())
     assert patch_resp.status_code >= 400 and patch_resp.status_code < 500
+
+
+# Test that moving a booking's start time into the past is rejected (consistent with create)
+def test_patch_start_time_in_past_not_allowed(client, member_token, member_council_id, db_session):
+    start = stockholm_dt(2030, 1, 10, 10)
+    end = stockholm_dt(2030, 1, 10, 12)
+    resp = create_booking(client, member_token, start, end, "booking", council_id=member_council_id)
+    assert resp.status_code in (200, 201)
+    booking_id = resp.json()["booking_id"]
+
+    past_start = stockholm_dt(2020, 1, 10, 10)
+    patch_resp = patch_booking(client, member_token, booking_id, start_time=past_start.isoformat())
+    assert patch_resp.status_code == 400
+
+    # Simulate an ongoing booking (start already in the past) by moving its
+    # times back directly in the db
+    booking = db_session.query(CarBooking_DB).filter_by(booking_id=booking_id).first()
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    booking.start_time = now - timedelta(hours=1)
+    booking.end_time = now + timedelta(hours=1)
+    db_session.commit()
+
+    # Extending its end time is still allowed: the past check only applies
+    # to a start time that is actually being set
+    new_end = now + timedelta(hours=2)
+    patch_resp2 = patch_booking(client, member_token, booking_id, end_time=new_end.isoformat())
+    assert patch_resp2.status_code == 200
 
 
 def test_admin_can_select_any_council(client, admin_token, admin_council_id, member_council_id):
