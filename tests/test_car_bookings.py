@@ -2,11 +2,13 @@
 import pytest
 from main import app
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from db_models.car_booking_model import CarBooking_DB
 from .basic_factories import auth_headers
 
-# Helper to get Stockholm local time (UTC+1 or UTC+2 DST, but for simplicity, use UTC+1)
-STOCKHOLM_TZ = timezone(timedelta(hours=1))
+# Helper to get Stockholm local time; uses the real time zone (with DST),
+# the same way the service does
+STOCKHOLM_TZ = ZoneInfo("Europe/Stockholm")
 
 
 def stockholm_dt(year, month, day, hour, minute=0):
@@ -35,7 +37,7 @@ def test_admin_autoconfirm_council(client, admin_token, admin_council_id):
     start = stockholm_dt(2030, 1, 8, 10)  # Tuesday
     end = stockholm_dt(2030, 1, 8, 12)
     resp = create_booking(client, admin_token, start, end, "admin booking", council_id=admin_council_id)
-    assert resp.status_code in (200, 201)
+    assert resp.status_code == 200
     data = resp.json()
     assert "confirmed" in data
     assert "booking_id" in data
@@ -44,19 +46,19 @@ def test_admin_autoconfirm_council(client, admin_token, admin_council_id):
     start = stockholm_dt(2030, 1, 8, 6)  # Before office hours
     end = stockholm_dt(2030, 1, 8, 7)
     resp2 = create_booking(client, admin_token, start, end, "early booking", council_id=admin_council_id)
-    assert resp2.status_code in (200, 201)
+    assert resp2.status_code == 200
     assert resp2.json()["confirmed"] is True
 
     start = stockholm_dt(2030, 1, 8, 18)  # After office hours
     end = stockholm_dt(2030, 1, 8, 19)
     resp3 = create_booking(client, admin_token, start, end, "late booking", council_id=admin_council_id)
-    assert resp3.status_code in (200, 201)
+    assert resp3.status_code == 200
     assert resp3.json()["confirmed"] is True
 
     start = stockholm_dt(2030, 1, 12, 10)  # Saturday
     end = stockholm_dt(2030, 1, 12, 12)
     resp4 = create_booking(client, admin_token, start, end, "weekend booking", council_id=admin_council_id)
-    assert resp4.status_code in (200, 201)
+    assert resp4.status_code == 200
     assert resp4.json()["confirmed"] is True
 
 
@@ -64,7 +66,7 @@ def test_admin_autoconfirm_personal(client, admin_token, admin_council_id):
     start = stockholm_dt(2030, 1, 8, 10)  # Tuesday
     end = stockholm_dt(2030, 1, 8, 12)
     resp = create_booking(client, admin_token, start, end, "admin booking", personal=True)
-    assert resp.status_code in (200, 201)
+    assert resp.status_code == 200
     data = resp.json()
     assert "confirmed" in data
     assert "booking_id" in data
@@ -73,19 +75,19 @@ def test_admin_autoconfirm_personal(client, admin_token, admin_council_id):
     start = stockholm_dt(2030, 1, 8, 6)  # Before office hours
     end = stockholm_dt(2030, 1, 8, 7)
     resp2 = create_booking(client, admin_token, start, end, "early booking", personal=True)
-    assert resp2.status_code in (200, 201)
+    assert resp2.status_code == 200
     assert resp2.json()["confirmed"] is True
 
     start = stockholm_dt(2030, 1, 8, 18)  # After office hours
     end = stockholm_dt(2030, 1, 8, 19)
     resp3 = create_booking(client, admin_token, start, end, "late booking", personal=True)
-    assert resp3.status_code in (200, 201)
+    assert resp3.status_code == 200
     assert resp3.json()["confirmed"] is True
 
     start = stockholm_dt(2030, 1, 12, 10)  # Saturday
     end = stockholm_dt(2030, 1, 12, 12)
     resp4 = create_booking(client, admin_token, start, end, "weekend booking", personal=True)
-    assert resp4.status_code in (200, 201)
+    assert resp4.status_code == 200
     assert resp4.json()["confirmed"] is True
 
 
@@ -94,14 +96,14 @@ def test_user_autoconfirm_council(client, member_token, member_council_id):
     start = stockholm_dt(2030, 1, 8, 10)
     end = stockholm_dt(2030, 1, 8, 12)
     resp = create_booking(client, member_token, start, end, "user booking", council_id=member_council_id)
-    assert resp.status_code in (200, 201)
+    assert resp.status_code == 200
     assert resp.json()["confirmed"] is True
 
     # Saturday
     start = stockholm_dt(2030, 1, 12, 10)
     end = stockholm_dt(2030, 1, 12, 12)
     resp = create_booking(client, member_token, start, end, "personal booking", council_id=member_council_id)
-    assert resp.status_code in (200, 201)
+    assert resp.status_code == 200
     assert resp.json()["confirmed"] is True
 
 
@@ -110,14 +112,14 @@ def test_user_autounconfirm_personal(client, member_token, member_council_id):
     start = stockholm_dt(2030, 1, 8, 10)
     end = stockholm_dt(2030, 1, 8, 12)
     resp = create_booking(client, member_token, start, end, "user booking", personal=True)
-    assert resp.status_code in (200, 201)
+    assert resp.status_code == 200
     assert resp.json()["confirmed"] is False
 
     # Saturday
     start = stockholm_dt(2030, 1, 12, 10)
     end = stockholm_dt(2030, 1, 12, 12)
     resp = create_booking(client, member_token, start, end, "personal booking", personal=True)
-    assert resp.status_code in (200, 201)
+    assert resp.status_code == 200
     assert resp.json()["confirmed"] is False
 
 
@@ -146,7 +148,7 @@ def test_member_cannot_confirm_own_booking(client, member_token, member_council_
     start = stockholm_dt(2030, 3, 10, 10)
     end = stockholm_dt(2030, 3, 10, 12)
     resp = create_booking(client, member_token, start, end, "personal booking", personal=True)
-    assert resp.status_code in (200, 201)
+    assert resp.status_code == 200
     booking_id = resp.json()["booking_id"]
     assert resp.json()["confirmed"] is False
 
@@ -284,14 +286,14 @@ def test_overlapping_bookings_not_allowed(client, member_token, member_council_i
     start = stockholm_dt(2030, 1, 11, 10)
     end = stockholm_dt(2030, 1, 11, 12)
     resp1 = create_booking(client, member_token, start, end, "first booking", council_id=member_council_id)
-    assert resp1.status_code in (200, 201)
+    assert resp1.status_code == 200
     assert resp1.json()["confirmed"] is True
 
     # Try to book overlapping slot
     start2 = stockholm_dt(2030, 1, 11, 11)
     end2 = stockholm_dt(2030, 1, 11, 13)
     resp2 = create_booking(client, member_token, start2, end2, "overlapping booking", council_id=member_council_id)
-    assert resp2.status_code >= 400 and resp2.status_code < 500
+    assert resp2.status_code == 400
 
 
 def test_admin_overlapping_bookings_not_allowed(client, admin_token, admin_council_id):
@@ -299,14 +301,14 @@ def test_admin_overlapping_bookings_not_allowed(client, admin_token, admin_counc
     start = stockholm_dt(2030, 1, 11, 10)
     end = stockholm_dt(2030, 1, 11, 12)
     resp1 = create_booking(client, admin_token, start, end, "admin first booking", council_id=admin_council_id)
-    assert resp1.status_code in (200, 201)
+    assert resp1.status_code == 200
     assert resp1.json()["confirmed"] is True
 
     # Try to book overlapping slot
     start2 = stockholm_dt(2030, 1, 11, 11)
     end2 = stockholm_dt(2030, 1, 11, 13)
     resp2 = create_booking(client, admin_token, start2, end2, "admin overlapping booking", council_id=admin_council_id)
-    assert resp2.status_code >= 400 and resp2.status_code < 500
+    assert resp2.status_code == 400
 
 
 def test_overlap_patch_not_allowed(client, member_token, member_council_id):
@@ -314,20 +316,20 @@ def test_overlap_patch_not_allowed(client, member_token, member_council_id):
     start = stockholm_dt(2030, 1, 10, 10)
     end = stockholm_dt(2030, 1, 10, 12)
     resp1 = create_booking(client, member_token, start, end, "first booking", council_id=member_council_id)
-    assert resp1.status_code in (200, 201)
+    assert resp1.status_code == 200
     assert resp1.json()["confirmed"] is True
 
     # Book second slot
     start2 = stockholm_dt(2030, 1, 10, 13)
     end2 = stockholm_dt(2030, 1, 10, 15)
     resp2 = create_booking(client, member_token, start2, end2, "second booking", council_id=member_council_id)
-    assert resp2.status_code in (200, 201)
+    assert resp2.status_code == 200
     assert resp2.json()["confirmed"] is True
 
     # Try to patch second booking to overlap with first
     id2 = resp2.json()["booking_id"]
     patch_resp = patch_booking(client, member_token, id2, start_time=start.isoformat(), end_time=end.isoformat())
-    assert patch_resp.status_code >= 400 and patch_resp.status_code < 500
+    assert patch_resp.status_code == 400
 
 
 # Test that a partial update whose resulting interval fully contains another
@@ -339,7 +341,7 @@ def test_overlap_patch_containment_not_allowed(client, member_token, member_coun
     resp_mid = create_booking(
         client, member_token, mid_start, mid_end, "middle booking", council_id=member_council_id
     )
-    assert resp_mid.status_code in (200, 201)
+    assert resp_mid.status_code == 200
 
     # Slot before the middle one; extending its end so it contains the middle one
     before_start = stockholm_dt(2030, 1, 10, 10)
@@ -347,7 +349,7 @@ def test_overlap_patch_containment_not_allowed(client, member_token, member_coun
     resp_before = create_booking(
         client, member_token, before_start, before_end, "before booking", council_id=member_council_id
     )
-    assert resp_before.status_code in (200, 201)
+    assert resp_before.status_code == 200
     id_before = resp_before.json()["booking_id"]
 
     new_end = stockholm_dt(2030, 1, 10, 15)
@@ -360,7 +362,7 @@ def test_overlap_patch_containment_not_allowed(client, member_token, member_coun
     resp_after = create_booking(
         client, member_token, after_start, after_end, "after booking", council_id=member_council_id
     )
-    assert resp_after.status_code in (200, 201)
+    assert resp_after.status_code == 200
     id_after = resp_after.json()["booking_id"]
 
     new_start = stockholm_dt(2030, 1, 10, 9)
@@ -373,7 +375,7 @@ def test_zero_length_booking_not_allowed(client, admin_token, admin_council_id):
     start = stockholm_dt(2030, 1, 16, 10)
     end = stockholm_dt(2030, 1, 16, 10)
     resp = create_booking(client, admin_token, start, end, "zero length", council_id=admin_council_id)
-    assert resp.status_code >= 400 and resp.status_code < 500
+    assert resp.status_code == 400
     # Create a valid booking, then try to patch to zero-length
     valid_end = stockholm_dt(2030, 1, 16, 12)
     resp2 = create_booking(client, admin_token, start, valid_end, "valid", council_id=admin_council_id)
@@ -381,7 +383,7 @@ def test_zero_length_booking_not_allowed(client, admin_token, admin_council_id):
     patch_resp = patch_booking(
         client, admin_token, booking_id, start_time=start.isoformat(), end_time=start.isoformat()
     )
-    assert patch_resp.status_code >= 400 and patch_resp.status_code < 500
+    assert patch_resp.status_code == 400
 
 
 def test_end_before_start_not_allowed(client, admin_token, admin_council_id):
@@ -389,13 +391,13 @@ def test_end_before_start_not_allowed(client, admin_token, admin_council_id):
     start = stockholm_dt(2030, 1, 17, 12)
     end = stockholm_dt(2030, 1, 17, 10)
     resp = create_booking(client, admin_token, start, end, "end before start", council_id=admin_council_id)
-    assert resp.status_code >= 400 and resp.status_code < 500
+    assert resp.status_code == 400
     # Create a valid booking, then try to patch to end before start
     valid_end = stockholm_dt(2030, 1, 17, 14)
     resp2 = create_booking(client, admin_token, start, valid_end, "valid", council_id=admin_council_id)
     booking_id = resp2.json()["booking_id"]
     patch_resp = patch_booking(client, admin_token, booking_id, start_time=start.isoformat(), end_time=end.isoformat())
-    assert patch_resp.status_code >= 400 and patch_resp.status_code < 500
+    assert patch_resp.status_code == 400
 
 
 # Test that moving a booking's start time into the past is rejected (consistent with create)
@@ -403,7 +405,7 @@ def test_patch_start_time_in_past_not_allowed(client, member_token, member_counc
     start = stockholm_dt(2030, 1, 10, 10)
     end = stockholm_dt(2030, 1, 10, 12)
     resp = create_booking(client, member_token, start, end, "booking", council_id=member_council_id)
-    assert resp.status_code in (200, 201)
+    assert resp.status_code == 200
     booking_id = resp.json()["booking_id"]
 
     past_start = stockholm_dt(2020, 1, 10, 10)
@@ -433,13 +435,13 @@ def test_admin_can_select_any_council(client, admin_token, admin_council_id, mem
 
     # Admin should be able to book with any council
     resp = create_booking(client, admin_token, start, end, "admin council booking", council_id=admin_council_id)
-    assert resp.status_code in (200, 201)
+    assert resp.status_code == 200
     assert resp.json()["council_id"] == admin_council_id
 
     resp2 = create_booking(
         client, admin_token, start2, end2, "admin other council booking", council_id=member_council_id
     )
-    assert resp2.status_code in (200, 201)
+    assert resp2.status_code == 200
     assert resp2.json()["council_id"] == member_council_id
 
 
@@ -449,7 +451,7 @@ def test_user_can_select_own_council(client, member_token, member_council_id):
 
     # User should be able to book with their own council
     resp = create_booking(client, member_token, start, end, "user council booking", council_id=member_council_id)
-    assert resp.status_code in (200, 201)
+    assert resp.status_code == 200
     assert resp.json()["council_id"] == member_council_id
 
 
@@ -459,7 +461,7 @@ def test_user_cannot_select_other_council(client, member_token, admin_council_id
 
     # User should not be able to book with a council they're not part of
     resp = create_booking(client, member_token, start, end, "unauthorized council booking", council_id=admin_council_id)
-    assert resp.status_code >= 400 and resp.status_code < 500
+    assert resp.status_code == 403
 
 
 def test_admin_edit_council(client, admin_token, admin_council_id, member_council_id):
@@ -486,7 +488,7 @@ def test_user_cannot_edit_to_unauthorized_council(client, member_token, member_c
 
     # User should not be able to change to unauthorized council
     resp2 = patch_booking(client, member_token, booking_id, council_id=admin_council_id)
-    assert resp2.status_code >= 400 and resp2.status_code < 500
+    assert resp2.status_code == 403
 
 
 def test_personal_booking_creation_admin(client, admin_token, admin_council_id):
@@ -497,7 +499,7 @@ def test_personal_booking_creation_admin(client, admin_token, admin_council_id):
     resp = create_booking(
         client, admin_token, start, end, "admin personal booking", personal=True, council_id=admin_council_id
     )
-    assert resp.status_code in (200, 201)
+    assert resp.status_code == 200
     data = resp.json()
     assert data["personal"] is True
 
@@ -510,7 +512,7 @@ def test_personal_booking_creation_user(client, member_token, member_council_id)
     resp = create_booking(
         client, member_token, start, end, "user personal booking", personal=True, council_id=member_council_id
     )
-    assert resp.status_code in (200, 201)
+    assert resp.status_code == 200
     data = resp.json()
     assert data["personal"] is True
 
@@ -532,7 +534,7 @@ def test_edit_personal_flag(client, admin_token, admin_council_id):
 
     # Edit back to non-personal without providing council
     resp3 = patch_booking(client, admin_token, booking_id, personal=False)
-    assert resp3.status_code >= 400 and resp3.status_code < 500  # Should be blocked
+    assert resp3.status_code == 400  # Should be blocked
 
     # Edit back to non-personal with providing council
     resp4 = patch_booking(client, admin_token, booking_id, personal=False, council_id=admin_council_id)
@@ -547,7 +549,7 @@ def test_personal_booking_no_council(client, member_token, member_council_id):
 
     # User creates a personal booking without council_id
     resp = create_booking(client, member_token, start, end, "personal no council", personal=True)
-    assert resp.status_code in (200, 201)
+    assert resp.status_code == 200
     data = resp.json()
     assert data["personal"] is True
     assert data["council_id"] is None
@@ -560,22 +562,22 @@ def test_non_member_booking_access(client, non_member_token, member_token):
 
     # Non-member should not be able to create a booking
     resp = create_booking(client, non_member_token, start, end, "non-member booking", personal=True)
-    assert resp.status_code >= 400 and resp.status_code < 500
+    assert resp.status_code == 403
 
     # Non-member should not be able to read bookings
     resp2 = client.get("/car/", headers=auth_headers(non_member_token))
-    assert resp2.status_code >= 400 and resp2.status_code < 500
+    assert resp2.status_code == 403
 
     # Non-member should not be able to edit bookings
     resp3 = create_booking(client, member_token, start, end, "member booking", personal=True)
-    assert resp3.status_code in (200, 201)
+    assert resp3.status_code == 200
     booking_id = resp3.json()["booking_id"]
     resp4 = patch_booking(client, non_member_token, booking_id, description="non-member edit", personal=True)
-    assert resp4.status_code >= 400 and resp4.status_code < 500
+    assert resp4.status_code == 403
 
     # Non-member should not be able to delete bookings
     resp5 = client.delete(f"/car/{booking_id}", headers=auth_headers(non_member_token))
-    assert resp5.status_code >= 400 and resp5.status_code < 500
+    assert resp5.status_code == 403
 
 
 # Test members can delete their own bookings
@@ -585,12 +587,12 @@ def test_member_delete_own_booking(client, member_token, member_council_id):
 
     # Member creates a booking
     resp = create_booking(client, member_token, start, end, "member booking", council_id=member_council_id)
-    assert resp.status_code in (200, 201)
+    assert resp.status_code == 200
     booking_id = resp.json()["booking_id"]
 
     # Member should be able to delete their own booking
     resp2 = client.delete(f"/car/{booking_id}", headers=auth_headers(member_token))
-    assert resp2.status_code in (200, 204)
+    assert resp2.status_code == 200
 
 
 # Test members cannot delete other members' bookings
@@ -600,12 +602,12 @@ def test_member_delete_other_booking(client, member_token, admin_token, admin_co
 
     # Admin creates a booking
     resp = create_booking(client, admin_token, start, end, "admin booking", council_id=admin_council_id)
-    assert resp.status_code in (200, 201)
+    assert resp.status_code == 200
     booking_id = resp.json()["booking_id"]
 
     # Member should not be able to delete admin's booking
     resp2 = client.delete(f"/car/{booking_id}", headers=auth_headers(member_token))
-    assert resp2.status_code >= 400 and resp2.status_code < 500
+    assert resp2.status_code == 401
 
 
 # Test admin can delete any booking
@@ -615,9 +617,9 @@ def test_admin_delete_any_booking(client, admin_token, member_token, member_coun
 
     # Member creates a booking
     resp = create_booking(client, member_token, start, end, "member booking", council_id=member_council_id)
-    assert resp.status_code in (200, 201)
+    assert resp.status_code == 200
     booking_id = resp.json()["booking_id"]
 
     # Admin should be able to delete the member's booking
     resp2 = client.delete(f"/car/{booking_id}", headers=auth_headers(admin_token))
-    assert resp2.status_code in (200, 204)
+    assert resp2.status_code == 200
