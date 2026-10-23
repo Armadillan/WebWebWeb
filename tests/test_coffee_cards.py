@@ -150,12 +150,56 @@ def test_cafe_staff_can_create_card(client, cafe_staff, membered_user):
     assert card["user"] == {"id": membered_user.id, "first_name": "Member", "last_name": "User"}
 
 
-def test_member_with_upcoming_shift_can_create_card(client, db_session, membered_user):
+def test_member_with_upcoming_shift_cannot_create_card(client, db_session, membered_user):
     user, token = make_member(client, db_session, "future-staff@example.com", "Future")
     now = datetime.now(timezone.utc)
     give_shift(db_session, user, now + timedelta(days=2), now + timedelta(days=2, hours=2))
 
+    assert create_card(client, token, membered_user.id).status_code == 403
+
+
+def test_member_with_shift_ending_within_buffer_can_create_card(client, db_session, membered_user):
+    # The shift ended 10 min ago, inside the default 15 min buffer
+    user, token = make_member(client, db_session, "recent-staff@example.com", "Recent")
+    now = datetime.now(timezone.utc)
+    give_shift(db_session, user, now - timedelta(hours=2, minutes=10), now - timedelta(minutes=10))
+
     assert create_card(client, token, membered_user.id).status_code == 200
+
+
+def test_member_with_shift_ending_outside_buffer_cannot_create_card(client, db_session, membered_user):
+    # The shift ended 30 min ago, outside the default 15 min buffer
+    user, token = make_member(client, db_session, "old-staff@example.com", "Old")
+    now = datetime.now(timezone.utc)
+    give_shift(db_session, user, now - timedelta(hours=2, minutes=30), now - timedelta(minutes=30))
+
+    assert create_card(client, token, membered_user.id).status_code == 403
+
+
+def test_member_with_shift_starting_within_buffer_can_create_card(client, db_session, membered_user):
+    # The shift starts in 10 min, inside the default 15 min buffer
+    user, token = make_member(client, db_session, "soon-staff@example.com", "Soon")
+    now = datetime.now(timezone.utc)
+    give_shift(db_session, user, now + timedelta(minutes=10), now + timedelta(hours=2, minutes=10))
+
+    assert create_card(client, token, membered_user.id).status_code == 200
+
+
+def test_shift_buffer_is_configurable(client, db_session, membered_user, monkeypatch):
+    # With a 60 min buffer, a shift that ended 30 min ago still counts
+    monkeypatch.setenv("CAFE_SHIFT_BUFFER_MINUTES", "60")
+    user, token = make_member(client, db_session, "wide-staff@example.com", "Wide")
+    now = datetime.now(timezone.utc)
+    give_shift(db_session, user, now - timedelta(hours=2, minutes=30), now - timedelta(minutes=30))
+
+    assert create_card(client, token, membered_user.id).status_code == 200
+
+    # With a 0 min buffer, even a shift that ended 10 min ago does not count
+    monkeypatch.setenv("CAFE_SHIFT_BUFFER_MINUTES", "0")
+    user, token = make_member(client, db_session, "strict-staff@example.com", "Strict")
+    give_shift(db_session, user, now - timedelta(hours=2, minutes=10), now - timedelta(minutes=10))
+
+    assert create_card(client, token, membered_user.id).status_code == 403
 
 
 def test_member_with_only_past_shift_cannot_create_card(client, db_session, membered_user):

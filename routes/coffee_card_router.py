@@ -1,4 +1,5 @@
-from datetime import UTC, datetime
+import os
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import and_, update
@@ -15,15 +16,17 @@ coffee_card_router = APIRouter()
 
 def is_cafe_authorized(user: User_DB) -> bool:
     """A user is authorized to handle other members' coffee cards if they have the
-    manage Cafe permission, or if they are signed up for a current or upcoming
-    cafe shift (i.e. they are working at the cafe)."""
+    manage Cafe permission, or if they are signed up for a current cafe shift.
+    A buffer (CAFE_SHIFT_BUFFER_MINUTES, default 15 min) is applied on each
+    end of the shift, so that staff can still act a bit before and after it."""
     for post in user.posts:
         for perm in post.permissions:
             if Permission.verify_permission(perm.action, perm.target, "manage", "Cafe"):
                 return True
 
     now = datetime.now(UTC)
-    return any(shift.ends_at >= now for shift in user.cafe_shifts)
+    buffer = timedelta(minutes=float(os.getenv("CAFE_SHIFT_BUFFER_MINUTES", "15")))
+    return any(shift.starts_at - buffer <= now <= shift.ends_at + buffer for shift in user.cafe_shifts)
 
 
 def cafe_authorization_check(user: Annotated[User_DB | None, Depends(current_verified_user)]) -> bool:

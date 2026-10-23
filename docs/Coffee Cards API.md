@@ -16,12 +16,12 @@ The digital version works exactly the same:
 
 ## Who is "cafe staff"?
 
-Some actions may only be done by the card owner **or** by a cafe staff member. The backend decides this in exactly one way:
+Some actions may only be done by a cafe staff member (the card owner always acts on their own cards). The backend decides staff status in exactly one way:
 
 A user is **cafe staff** if they either
 
 1. have a permission that covers `manage Cafe` (i.e. `manage Cafe`, `manage all` or `super` on any target), **or**
-2. are signed up for a **current or upcoming** cafe shift (see `/cafe-shifts`), i.e. they are working at the cafe.
+2. are signed up for a **current** cafe shift (see `/cafe-shifts`), i.e. they are working at the cafe. A buffer is applied on each end of the shift so that staff can still act a short time before and after it: `CAFE_SHIFT_BUFFER_MINUTES` environment variable, default `15`.
 
 This mirrors the physical world: whoever is working at the cafe can serve coffee and hand out cards, no matter which (or no) post they hold.
 
