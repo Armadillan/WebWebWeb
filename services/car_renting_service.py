@@ -145,12 +145,11 @@ def create_new_booking(
         council_id=data.council_id,
     )
     db.add(db_booking)
-
-    db.flush()
-
-    bilf_mailer.bilf_mailer(db_booking)
-
     db.commit()
+
+    # Notify the car owner only after the booking has been committed,
+    # so a failed commit never results in a mail about a non-existing booking
+    bilf_mailer.bilf_mailer(db_booking)
 
     return db_booking
 
