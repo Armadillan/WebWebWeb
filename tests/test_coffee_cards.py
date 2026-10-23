@@ -262,13 +262,11 @@ def test_owner_can_cross_off(client, cafe_staff, membered_user, member_token):
     assert data["remaining_coffees"] == 10
 
 
-def test_cafe_staff_can_cross_off_other_users_card(client, cafe_staff, membered_user):
+def test_cafe_staff_cannot_cross_off_other_users_card(client, cafe_staff, membered_user):
     _, staff_token = cafe_staff
     card_id = create_card(client, staff_token, membered_user.id).json()["id"]
 
-    resp = cross_off(client, staff_token, card_id)
-    assert resp.status_code == 200
-    assert resp.json()["remaining_coffees"] == 10
+    assert cross_off(client, staff_token, card_id).status_code == 403
 
 
 def test_other_member_cannot_cross_off(client, cafe_staff, membered_user, db_session):
@@ -308,12 +306,12 @@ def test_owner_can_transfer_card(client, cafe_staff, membered_user, member_token
     assert [card["id"] for card in resp.json()] == [card_id]
 
 
-def test_cafe_staff_can_transfer_card(client, cafe_staff, membered_user, db_session):
+def test_cafe_staff_cannot_transfer_card(client, cafe_staff, membered_user, db_session):
     _, staff_token = cafe_staff
     other, _ = make_member(client, db_session, "target@example.com", "Target")
     card_id = create_card(client, staff_token, membered_user.id).json()["id"]
 
-    assert transfer(client, staff_token, card_id, other.id).status_code == 200
+    assert transfer(client, staff_token, card_id, other.id).status_code == 403
 
 
 def test_other_member_cannot_transfer_card(client, cafe_staff, membered_user, db_session):

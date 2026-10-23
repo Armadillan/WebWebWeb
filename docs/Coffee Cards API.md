@@ -9,7 +9,7 @@ The guild sells physical coffee cards at the cafe: you pay for 10 coffees and ge
 The digital version works exactly the same:
 
 - A **card** belongs to a user and contains **11 coffees** by default.
-- The owner (or someone working at the cafe) can **cross off** one coffee from a card.
+- The owner can **cross off** one coffee from a card (honor system).
 - A card can be **transferred** to another user.
 - A user can own **any number** of cards.
 - Cards do not expire and cannot be refunded, so members cannot delete their own cards — only staff can, for example to remove a card that was added twice by mistake.
@@ -107,21 +107,21 @@ Adds a new card to a user's profile. This is what cafe staff do when a member bu
 
 ### `POST /coffee-cards/{card_id}/cross-off`
 
-Crosses off one coffee on the card (no request body).
+Crosses off one coffee on the card (no request body). The owner crosses off their own coffees, exactly like crossing off the physical card themselves.
 
-- Allowed for the card owner and for cafe staff (just like crossing off the physical card at the counter, or crossing it off yourself).
+- **Card owner only.**
 - Response `200`: the updated `CoffeeCard`
 - Response `404`: no such card
 - Response `400`: the card is already empty
-- Response `403`: not the owner and not cafe staff
+- Response `403`: not the owner
 
 Crossing off is atomic on the backend: two simultaneous cross-offs can never drain a card past zero coffees.
 
 ### `POST /coffee-cards/{card_id}/transfer`
 
-Transfers the card to another user, i.e. the new owner is the only one who can cross off from it afterwards (cafe staff still can, as always).
+Transfers the card to another user, i.e. the new owner is the only one who can cross off from it afterwards.
 
-- Allowed for the card owner and for cafe staff.
+- **Card owner only.**
 - Request body:
 
 ```json
@@ -130,7 +130,7 @@ Transfers the card to another user, i.e. the new owner is the only one who can c
 
 - Response `200`: the updated `CoffeeCard` (now with the new owner)
 - Response `404`: no such card / no such user
-- Response `403`: not the owner and not cafe staff
+- Response `403`: not the owner
 
 ### `DELETE /coffee-cards/{card_id}`
 
@@ -145,11 +145,9 @@ Deletes a card. **Cafe staff only** — for when a card was added by mistake (e.
 The backend does not assume anything about how the QR code looks — the frontend may encode whatever it wants in it (a user id, a card id, a url, json, ...). The endpoints above are all keyed by plain `user_id` / `card_id` and can be combined to fit any scheme:
 
 1. **Buying a card at the cafe.** The member shows their QR code in the app (e.g. on their profile page). A staff member scans it, looks up the member, and calls `POST /coffee-cards/` with the member's `user_id`. The card shows up in the member's profile.
-2. **Getting a coffee.**
-   - *Self-service:* the owner opens their profile and taps "cross off" on a card → `POST /coffee-cards/{card_id}/cross-off`.
-   - *At the cafe:* the staff member scans the QR code, opens the card (by `card_id`, or lists the user's cards by `user_id`) and crosses off on their behalf.
+2. **Getting a coffee.** The owner opens their profile and taps "cross off" on a card → `POST /coffee-cards/{card_id}/cross-off`. This works at the cafe too: the member crosses off their own coffee themselves (honor system), and the staff member simply looks over it (they can view the card by `card_id`, or list the user's cards by `user_id`).
 3. **Gifting a card.** The owner transfers it to the recipient's profile.
-4. **Admin work.** Staff can list a user's cards, cross off, transfer, or delete a card — useful for fixing double scans or handling edge cases.
+4. **Admin work.** Staff can list and view a user's cards, add cards, or delete a card — useful for fixing double scans or handling edge cases.
 
 ## Errors
 

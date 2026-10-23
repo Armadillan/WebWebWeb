@@ -106,17 +106,14 @@ def create_card(
 def cross_off_coffee(
     card_id: int,
     user: Annotated[User_DB, Permission.member()],
-    cafe_authorized: Annotated[bool, Depends(cafe_authorization_check)],
     db: DB_dependency,
 ):
-    # Crosses off one coffee on the card, the owner or someone working at the cafe
+    # Crosses off one coffee on the card; only the owner can do this (honor system)
     card = db.query(CoffeeCard_DB).filter_by(id=card_id).one_or_none()
     if card is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Coffee card not found")
-    if card.user_id != user.id and not cafe_authorized:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, detail="Only the card owner or cafe staff can cross off a coffee"
-        )
+    if card.user_id != user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only the card owner can cross off a coffee")
 
     # Atomic, so two simultaneous cross-offs can never drain the card past zero
     result = db.execute(
@@ -137,17 +134,14 @@ def transfer_card(
     card_id: int,
     data: CoffeeCardTransfer,
     user: Annotated[User_DB, Permission.member()],
-    cafe_authorized: Annotated[bool, Depends(cafe_authorization_check)],
     db: DB_dependency,
 ):
     # Hands the card over to another user, just like handing over a physical card
     card = db.query(CoffeeCard_DB).filter_by(id=card_id).one_or_none()
     if card is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Coffee card not found")
-    if card.user_id != user.id and not cafe_authorized:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, detail="Only the card owner or cafe staff can transfer this card"
-        )
+    if card.user_id != user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only the card owner can transfer this card")
 
     recipient = db.query(User_DB).filter_by(id=data.user_id).one_or_none()
     if recipient is None:
