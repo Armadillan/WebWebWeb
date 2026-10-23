@@ -329,6 +329,44 @@ def test_overlap_patch_not_allowed(client, member_token, member_council_id):
     assert patch_resp.status_code >= 400 and patch_resp.status_code < 500
 
 
+# Test that a partial update whose resulting interval fully contains another
+# booking is rejected (previously only detected when both times were sent)
+def test_overlap_patch_containment_not_allowed(client, member_token, member_council_id):
+    # Middle slot
+    mid_start = stockholm_dt(2030, 1, 10, 12)
+    mid_end = stockholm_dt(2030, 1, 10, 14)
+    resp_mid = create_booking(
+        client, member_token, mid_start, mid_end, "middle booking", council_id=member_council_id
+    )
+    assert resp_mid.status_code in (200, 201)
+
+    # Slot before the middle one; extending its end so it contains the middle one
+    before_start = stockholm_dt(2030, 1, 10, 10)
+    before_end = stockholm_dt(2030, 1, 10, 11)
+    resp_before = create_booking(
+        client, member_token, before_start, before_end, "before booking", council_id=member_council_id
+    )
+    assert resp_before.status_code in (200, 201)
+    id_before = resp_before.json()["booking_id"]
+
+    new_end = stockholm_dt(2030, 1, 10, 15)
+    patch_resp = patch_booking(client, member_token, id_before, end_time=new_end.isoformat())
+    assert patch_resp.status_code == 400
+
+    # Slot after the middle one; moving its start so it contains the middle one
+    after_start = stockholm_dt(2030, 1, 10, 15)
+    after_end = stockholm_dt(2030, 1, 10, 17)
+    resp_after = create_booking(
+        client, member_token, after_start, after_end, "after booking", council_id=member_council_id
+    )
+    assert resp_after.status_code in (200, 201)
+    id_after = resp_after.json()["booking_id"]
+
+    new_start = stockholm_dt(2030, 1, 10, 9)
+    patch_resp2 = patch_booking(client, member_token, id_after, start_time=new_start.isoformat())
+    assert patch_resp2.status_code == 400
+
+
 def test_zero_length_booking_not_allowed(client, admin_token, admin_council_id):
     # Try to create a zero-length booking
     start = stockholm_dt(2030, 1, 16, 10)

@@ -41,43 +41,27 @@ def overlap_query_create(
     return False
 
 
-def overlap_query_update(booking: CarBookingUpdate, booking_id: int, db: DB_dependency):
+def overlap_query_update(
+    start_time: datetime,
+    end_time: datetime,
+    booking_id: int,
+    db: DB_dependency,
+):
+    """Checks whether the interval [start_time, end_time) overlaps any other booking.
+
+    start_time and end_time must be the *effective* times of the booking being
+    updated (the new values if provided, otherwise the existing ones), so that
+    partial updates are checked against the full resulting interval.
+    """
     result = (
         db.query(CarBooking_DB)
         .filter(
             and_(
-                or_(  # This mess below makes sure stuff doesn't break if start_time or end_time is None
-                    *(
-                        (
-                            and_(
-                                booking.start_time >= CarBooking_DB.start_time,
-                                booking.start_time < CarBooking_DB.end_time,
-                            ),
-                        )
-                        if booking.start_time is not None
-                        else ()
-                    ),
-                    *(
-                        (
-                            and_(
-                                booking.end_time > CarBooking_DB.start_time,
-                                booking.end_time <= CarBooking_DB.end_time,
-                            ),
-                        )
-                        if booking.end_time is not None
-                        else ()
-                    ),
-                    *(
-                        (
-                            and_(
-                                booking.start_time <= CarBooking_DB.start_time,
-                                booking.end_time >= CarBooking_DB.end_time,
-                            ),
-                        )
-                        if (booking.start_time is not None and booking.end_time is not None)
-                        else ()
-                    ),
-                ),  # This checks so that there is no overlap with other bookings before being added to the table
+                or_(
+                    and_(start_time >= CarBooking_DB.start_time, start_time < CarBooking_DB.end_time),
+                    and_(end_time > CarBooking_DB.start_time, end_time <= CarBooking_DB.end_time),
+                    and_(start_time <= CarBooking_DB.start_time, end_time >= CarBooking_DB.end_time),
+                ),
                 # filters out the booking we are editing
                 literal(booking_id) != CarBooking_DB.booking_id,
             )
@@ -85,8 +69,7 @@ def overlap_query_update(booking: CarBookingUpdate, booking_id: int, db: DB_depe
         .first()
     )
 
-    if result:
-        return True
+    return result is not None
 
 
 def create_new_booking(
@@ -191,7 +174,8 @@ def booking_update(
             )
 
         booking_overlaps = overlap_query_update(
-            booking=data,
+            start_time=check_start_time,
+            end_time=check_end_time,
             booking_id=booking_id,
             db=db,
         )
