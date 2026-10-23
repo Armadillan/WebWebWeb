@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from .news_model import News_DB
     from .ad_model import BookAd_DB
     from .cafe_shift_model import CafeShift_DB
+    from .coffee_card_model import CoffeeCard_DB
     from .tool_booking_model import ToolBooking_DB
 
 
@@ -92,6 +93,10 @@ class User_DB(BaseModel_DB, SQLAlchemyBaseUserTable[int]):
     )
 
     cafe_shifts: Mapped[list["CafeShift_DB"]] = relationship(back_populates="user", init=False)
+
+    coffee_cards: Mapped[list["CoffeeCard_DB"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", init=False
+    )
 
     tool_bookings: Mapped[list["ToolBooking_DB"]] = relationship(
         back_populates="user", cascade="all, delete-orphan", passive_deletes=True, init=False
