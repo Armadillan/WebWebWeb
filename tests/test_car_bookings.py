@@ -45,6 +45,7 @@ def test_private_booking_email_includes_ics_and_update_notice(monkeypatch):
     booking = SimpleNamespace(
         booking_id=42,
         personal=True,
+        confirmed=True,
         start_time=datetime(2030, 1, 8, 9, 0, tzinfo=timezone.utc),
         end_time=datetime(2030, 1, 8, 12, 0, tzinfo=timezone.utc),
         user=SimpleNamespace(first_name="Ada", last_name="Lovelace"),
@@ -61,8 +62,98 @@ def test_private_booking_email_includes_ics_and_update_notice(monkeypatch):
     assert "DTSTART:" in payload
     assert "DTEND:" in payload
 
-    bilf_mailer_module.bilf_mailer(booking, is_update=True)
+    bilf_mailer_module.bilf_mailer(booking, action="updated")
     assert "Updated private car booking" in captured["msg"]["Subject"]
+
+
+def _private_booking(**kwargs):
+    fields = dict(
+        booking_id=7,
+        personal=True,
+        confirmed=False,
+        start_time=datetime(2030, 1, 8, 9, 0, tzinfo=timezone.utc),
+        end_time=datetime(2030, 1, 8, 12, 0, tzinfo=timezone.utc),
+        user=SimpleNamespace(first_name="Ada", last_name="Lovelace"),
+        council=None,
+    )
+    fields.update(kwargs)
+    return SimpleNamespace(**fields)
+
+
+def _ics_fields(ics):
+    unfolded = ics.replace("\r\n ", "")
+    return dict(line.split(":", 1) for line in unfolded.split("\r\n") if line)
+
+
+def test_private_booking_ics_status_sequence_and_format(monkeypatch):
+    ics = bilf_mailer_module.render_bilf_ics(_private_booking(user=SimpleNamespace(first_name="A" * 80, last_name="B")))
+    assert "\r\n" in ics and "\n" not in ics.replace("\r\n", "")
+    assert all(len(line.encode("utf-8")) <= 75 for line in ics.split("\r\n"))
+    fields = _ics_fields(ics)
+    assert fields["METHOD"] == "REQUEST"
+    assert fields["STATUS"] == "TENTATIVE"
+    assert fields["ORGANIZER;CN=F-sektionen"] == "mailto:no-reply@fsektionen.se"
+    assert fields["ATTENDEE;CN=BilF;RSVP=FALSE"] == "mailto:bil@fsektionen.se"
+
+    assert _ics_fields(bilf_mailer_module.render_bilf_ics(_private_booking(confirmed=True)))["STATUS"] == "CONFIRMED"
+
+    first = bilf_mailer_module.datetime(2030, 1, 1, tzinfo=timezone.utc)
+    later = bilf_mailer_module.datetime(2030, 1, 2, tzinfo=timezone.utc)
+
+    class FakeDatetime(bilf_mailer_module.datetime):
+        current = first
+
+        @classmethod
+        def now(cls, tz=None):
+            return cls.current
+
+    monkeypatch.setattr(bilf_mailer_module, "datetime", FakeDatetime)
+    seq_first = int(_ics_fields(bilf_mailer_module.render_bilf_ics(_private_booking(), "updated"))["SEQUENCE"])
+    FakeDatetime.current = later
+    seq_later = int(_ics_fields(bilf_mailer_module.render_bilf_ics(_private_booking(), "updated"))["SEQUENCE"])
+    assert seq_later > seq_first
+
+    cancel = _ics_fields(bilf_mailer_module.render_bilf_ics(_private_booking(), "deleted"))
+    assert cancel["METHOD"] == "CANCEL"
+    assert cancel["STATUS"] == "CANCELLED"
+
+
+def test_private_booking_delete_sends_cancel(client, admin_token, monkeypatch):
+    sent = []
+    monkeypatch.setattr(bilf_mailer_module, "send_mail_to_address", lambda address, msg: sent.append(msg))
+
+    resp = create_booking(
+        client, admin_token, stockholm_dt(2030, 1, 8, 10), stockholm_dt(2030, 1, 8, 12), "private", personal=True
+    )
+    assert resp.status_code in (200, 201)
+    booking_id = resp.json()["booking_id"]
+
+    resp = client.delete(f"/car/{booking_id}", headers=auth_headers(admin_token))
+    assert resp.status_code == 200
+    assert "Cancelled" in sent[-1]["Subject"]
+    calendar_part = next(part for part in sent[-1].walk() if part.get_content_type() == "text/calendar")
+    payload = calendar_part.get_payload(decode=True).decode("utf-8")
+    assert "METHOD:CANCEL" in payload
+    assert f"UID:car-booking-{booking_id}@fsektionen.se" in payload
+
+
+def test_private_to_council_update_sends_cancel(client, admin_token, admin_council_id, monkeypatch):
+    sent = []
+    monkeypatch.setattr(bilf_mailer_module, "send_mail_to_address", lambda address, msg: sent.append(msg))
+
+    resp = create_booking(
+        client, admin_token, stockholm_dt(2030, 1, 8, 10), stockholm_dt(2030, 1, 8, 12), "private", personal=True
+    )
+    booking_id = resp.json()["booking_id"]
+
+    resp = patch_booking(client, admin_token, booking_id, description="still private")
+    assert resp.status_code == 200
+    assert "Updated" in sent[-1]["Subject"]
+
+    resp = patch_booking(client, admin_token, booking_id, personal=False, council_id=admin_council_id)
+    assert resp.status_code == 200
+    assert "moved to council" in sent[-1]["Subject"]
+    assert len(sent) == 3
 
 
 def test_council_booking_creation_sends_email(client, admin_token, admin_council_id, monkeypatch):
@@ -71,9 +162,7 @@ def test_council_booking_creation_sends_email(client, admin_token, admin_council
 
     start = stockholm_dt(2030, 1, 8, 10)
     end = stockholm_dt(2030, 1, 8, 12)
-    response = create_booking(
-        client, admin_token, start, end, "council booking", council_id=admin_council_id
-    )
+    response = create_booking(client, admin_token, start, end, "council booking", council_id=admin_council_id)
 
     assert response.status_code in (200, 201)
     assert len(sent_bookings) == 1
